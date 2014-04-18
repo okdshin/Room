@@ -4,6 +4,7 @@
 #define GLM_FORCE_RADIANS
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtx/rotate_vector.hpp>
 #include <savage/shader.h>
 #include <savage/context.h>
 #include <savage/instance.h>
@@ -15,43 +16,60 @@
 #define GLSL(version, shader) "#version " #version "\n" #shader
 const char* vert = GLSL
 ( 
-    150,
-    in vec3 VertexPosition;
-	in vec3 VertexColor;
+    130,
 
-	out vec3 Color;
-
-	uniform mat4 ViewProjectionMatrix;
+    in vec3 Position;
+	//in vec3 Normal;
+	
 	uniform mat4 ModelMatrix;
+	uniform mat4 ViewMatrix;
+	uniform mat4 ProjectionMatrix;
+
+	//out vec4 VertexPosition;
+	//out vec3 VertexNormal;
+
     void main()
     {
-		Color = VertexColor;
-        gl_Position = ViewProjectionMatrix * ModelMatrix * vec4(VertexPosition, 1.0);
+		gl_Position = ProjectionMatrix * ViewMatrix * ModelMatrix * vec4(Position, 1.0);
+		//VertexNormal = vec3(1.0, 0, 0);//Normal;
     }
-
 );
 const char* geometry = GLSL
 ( 
-    150,
-	in vec3 Color;
-	out vec3 
+    130,
+##extension GL_ARB_geometry_shader4 : enable
+	int i;
+	//in vec4 VertexPosition;
+	//in vec3 VertexNromal;
+
+	//out vec3 GeomNormal;
+
 	void main()
 	{
-		Color = 
+	/*
+		for(i = 0; i < ; ++i){
+			gl_Position = gl_PositionIn[i];
+			//GeomNormal = VertexNormal;
+			EmitVertex();
+		}
+		EndPrimitive();
+		*/
 	}
 );
 
 const char* frag = GLSL
 ( 
-    150,
-	in vec3 Color;
+    130,
+
+	//in vec3 GeomNormal;
+
     out vec4 FragColor;
+
     void main()
     {
         //FragColor = vec4(Color.xy, 1.0, 1.0);
 		FragColor = vec4(1.0, 1.0, 1.0, 1.0);
     }
-
 );
 
 typedef savage::basic_context<glm::vec2, glm::vec2> context;
@@ -69,7 +87,7 @@ public:
 		data.push_back(glm::vec3(0,0,0));
 		model_.reset(new savage::model());
 		model_->load_from_obj_file("cube.obj");
-		model_->initialize(program_, "VertexPosition");
+		model_->initialize(program_, "Position");
 		//model_ = models::load_from_obj_file("cube.obj");
 		// initialize shader
 		{
@@ -97,6 +115,8 @@ public:
 	void Update(const Time& time) {
 		const float delta_time = savage::times::get_seconds(time)-before_time_;
 
+		const glm::vec2
+			window_size = savage::contexts::get_window_size(context_);
 		const glm::vec2 
 			window_center = 0.5f*savage::contexts::get_window_size(context_);
 		const glm::vec2
@@ -104,10 +124,17 @@ public:
 		camera_rotation_ += cursor_speed_*(cursor_position-window_center);
 		const float& camera_yaw = camera_rotation_[0];
 		const float& camera_pitch = camera_rotation_[1];
-		glm::vec3 camera_direction(
-				std::cos(camera_pitch)*std::sin(camera_yaw),
-				std::sin(camera_pitch),
-				std::cos(camera_pitch)*std::cos(camera_yaw));
+		/*
+				*/
+		glm::vec3 camera_direction(0, 0, 1.0);
+		camera_direction = glm::rotateZ(camera_direction, camera_pitch);
+		camera_direction = glm::rotateY(camera_direction, camera_yaw);
+		/*
+		(
+				std::cos(camera_yaw)*std::sin(camera_pitch),
+				std::cos(camera_yaw)*std::cos(camera_pitch),
+				std::sin(camera_yaw));
+		*/
 
 		{
 			using namespace savage::key_states;
@@ -127,36 +154,40 @@ public:
 	
 		{
 			using namespace savage::shader;
-			glm::mat4 view_matrix = glm::lookAt(camera_position_, 
-					camera_direction+camera_position_, glm::vec3(0, 1.0f, 0));
 
 			glm::mat4 projection_matrix =
-				glm::perspective(45.0f, 4.0f / 3.0f, 0.1f, 100.0f);
+				glm::perspective(30.0f, 2.0f / 3.0f, 0.1f, 100.0f);
+			programs::set_uniform(program_, "ProjectionMatrix", projection_matrix);
 
-			glm::mat4 vp = projection_matrix * view_matrix;
-			programs::set_uniform(program_, "ViewProjectionMatrix", vp);
-		
 			{
-				glm::mat4 id_matrix;
-				glm::mat4 model_matrix = 
-					glm::translate(id_matrix, glm::vec3(0, 0, 4.0f));
-				programs::set_uniform(program_, "ModelMatrix", model_matrix);
-				savage::models::draw(*model_);
+				glm::vec3 left_camera_position = camera_position_+glm::vec3(0.035, 0, 0);
+				glm::mat4 view_matrix = glm::lookAt(left_camera_position, 
+						camera_direction+left_camera_position, glm::vec3(0, 1.0f, 0));
+				programs::set_uniform(program_, "ViewMatrix", view_matrix);
+				glViewport(0, 0, window_size[0]/2, window_size[1]);
+				scene();
 			}
-			/*
 			{
-				glm::mat4 id_matrix;
-				glm::mat4 model_matrix = 
-					glm::translate(id_matrix, glm::vec3(0, 0, 4.4f));
-				programs::set_uniform(program_, "ModelMatrix", model_matrix);
-				savage::models::draw(*model_);
+				glm::vec3 right_camera_position = camera_position_+glm::vec3(-0.035, 0, 0);
+				glm::mat4 view_matrix = glm::lookAt(right_camera_position,
+						camera_direction+right_camera_position, glm::vec3(0, 1.0f, 0));
+				programs::set_uniform(program_, "ViewMatrix", view_matrix);
+				glViewport(window_size[0]/2, 0, window_size[0]/2, window_size[1]);
+				scene();
 			}
-			*/
-
-			/*
-			vertex_array_objects::draw(model_);
-			*/
 		}
+	}
+
+	void scene() {
+		using namespace savage::shader;
+		glm::mat4 id_matrix;
+		programs::set_uniform(program_, "ModelMatrix", 
+				glm::scale(glm::translate(id_matrix, glm::vec3(0, 0, 4.0f)), 
+					glm::vec3(1.0f)));
+		savage::models::draw(*model_);
+		programs::set_uniform(program_, "ModelMatrix", 
+				glm::translate(id_matrix, glm::vec3(0, 1.0f, 1.0f)));
+		savage::models::draw(*model_);
 	}
 	
 	Room(context& context) : 
@@ -202,7 +233,7 @@ namespace savage { namespace instances {
 }// namespace savage
 int main(int argc, char* argv[])
 {
-	context context(savage::window_size(1280, 800));
+	context context(savage::window_size(640, 400));
 	glewInit();
 	Room room(context);
 	room.Initialize();
