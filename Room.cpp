@@ -25,50 +25,25 @@ const char* vert = GLSL
 	uniform mat4 ViewMatrix;
 	uniform mat4 ProjectionMatrix;
 
-	//out vec4 VertexPosition;
-	//out vec3 VertexNormal;
+	out vec3 LightIntensity;
 
     void main()
     {
 		gl_Position = ProjectionMatrix * ViewMatrix * ModelMatrix * vec4(Position, 1.0);
-		//VertexNormal = vec3(1.0, 0, 0);//Normal;
     }
-);
-const char* geometry = GLSL
-( 
-    130,
-##extension GL_ARB_geometry_shader4 : enable
-	int i;
-	//in vec4 VertexPosition;
-	//in vec3 VertexNromal;
-
-	//out vec3 GeomNormal;
-
-	void main()
-	{
-	/*
-		for(i = 0; i < ; ++i){
-			gl_Position = gl_PositionIn[i];
-			//GeomNormal = VertexNormal;
-			EmitVertex();
-		}
-		EndPrimitive();
-		*/
-	}
 );
 
 const char* frag = GLSL
-( 
+(
     130,
 
-	//in vec3 GeomNormal;
+	in vec3 LightIntensity;
 
-    out vec4 FragColor;
+    out vec4 FragmentColor;
 
     void main()
     {
-        //FragColor = vec4(Color.xy, 1.0, 1.0);
-		FragColor = vec4(1.0, 1.0, 1.0, 1.0);
+		FragmentColor = vec4(LightIntensity, 1.0);
     }
 );
 
@@ -85,23 +60,18 @@ public:
 		data.push_back(glm::vec3(1,1,0));
 		data.push_back(glm::vec3(0,1,0));
 		data.push_back(glm::vec3(0,0,0));
-		model_.reset(new savage::model());
-		model_->load_from_obj_file("cube.obj");
+		//model_.reset(new savage::model("cornell_box.obj"));
+		//model_.reset(new savage::model("/home/okada/Downloads/rungholt/rungholt.obj"));
+		//model_.reset(new savage::model("sponza.obj"));
+		model_.reset(new savage::model("cornell2_from_blender.obj"));
 		model_->initialize(program_, "Position");
-		//model_ = models::load_from_obj_file("cube.obj");
+
 		// initialize shader
 		{
 			vertex_object vertex_object;
 			objects::compile(vertex_object, vert);
 			programs::attach_object(program_, vertex_object);
 		}
-		/*
-		{
-			geometry_object geometry_object;
-			objects::compile(geometry_object, geometry);
-			programs::attach_object(program_, geometry_object);
-		}
-		*/
 		{
 			fragment_object fragment_object;
 			objects::compile(fragment_object, frag);
@@ -109,6 +79,15 @@ public:
 		}
 		programs::link(program_);
 		programs::use(program_);
+
+		/*
+		const glm::vec2 
+			window_center = 0.5f*savage::contexts::get_window_size(context_);
+		savage::contexts::set_cursor_position(context_, window_center);
+		glfwPollEvents();
+		*/
+		glEnable(GL_DEPTH_TEST);
+		glDepthFunc(GL_LEQUAL);
 	}
 
 	template<typename Time>
@@ -121,20 +100,14 @@ public:
 			window_center = 0.5f*savage::contexts::get_window_size(context_);
 		const glm::vec2
 			cursor_position = savage::contexts::get_cursor_position(context_);
+
 		camera_rotation_ += cursor_speed_*(cursor_position-window_center);
 		const float& camera_yaw = camera_rotation_[0];
 		const float& camera_pitch = camera_rotation_[1];
-		/*
-				*/
+
 		glm::vec3 camera_direction(0, 0, 1.0);
-		camera_direction = glm::rotateZ(camera_direction, camera_pitch);
+		camera_direction = glm::rotateX(camera_direction, -camera_pitch);
 		camera_direction = glm::rotateY(camera_direction, camera_yaw);
-		/*
-		(
-				std::cos(camera_yaw)*std::sin(camera_pitch),
-				std::cos(camera_yaw)*std::cos(camera_pitch),
-				std::sin(camera_yaw));
-		*/
 
 		{
 			using namespace savage::key_states;
@@ -148,6 +121,9 @@ public:
 			if(is_pressed(get_key_state(context_, down))){
 				camera_position_ -= camera_move_speed_ * delta_time * camera_direction;
 			}
+			if(is_pressed(get_key_state(context_, r_key))){ //reset camera direction
+				camera_rotation_ = glm::vec2();
+			}
 			savage::contexts::set_cursor_position(context_, window_center);
 			before_time_ = savage::times::get_seconds(time);
 		}
@@ -156,21 +132,28 @@ public:
 			using namespace savage::shader;
 
 			glm::mat4 projection_matrix =
-				glm::perspective(30.0f, 2.0f / 3.0f, 0.1f, 100.0f);
+				glm::perspective(30.0f, 2.0f / 3.0f, 0.1f, 1000.0f);
 			programs::set_uniform(program_, "ProjectionMatrix", projection_matrix);
 
 			{
-				glm::vec3 left_camera_position = camera_position_+glm::vec3(0.035, 0, 0);
+				glm::vec3 left_camera_position = glm::vec3(-0.035, 0, 0);
+				left_camera_position = glm::rotateX(left_camera_position, -camera_pitch);
+				left_camera_position = glm::rotateY(left_camera_position, camera_yaw);
+				left_camera_position += camera_position_;
+
 				glm::mat4 view_matrix = glm::lookAt(left_camera_position, 
-						camera_direction+left_camera_position, glm::vec3(0, 1.0f, 0));
+						camera_direction+left_camera_position, glm::vec3(0, -1.0f, 0));
 				programs::set_uniform(program_, "ViewMatrix", view_matrix);
 				glViewport(0, 0, window_size[0]/2, window_size[1]);
 				scene();
 			}
 			{
-				glm::vec3 right_camera_position = camera_position_+glm::vec3(-0.035, 0, 0);
+				glm::vec3 right_camera_position = glm::vec3(0.035, 0, 0);
+				right_camera_position = glm::rotateX(right_camera_position, -camera_pitch);
+				right_camera_position = glm::rotateY(right_camera_position, camera_yaw);
+				right_camera_position += camera_position_;
 				glm::mat4 view_matrix = glm::lookAt(right_camera_position,
-						camera_direction+right_camera_position, glm::vec3(0, 1.0f, 0));
+						camera_direction+right_camera_position, glm::vec3(0, -1.0f, 0));
 				programs::set_uniform(program_, "ViewMatrix", view_matrix);
 				glViewport(window_size[0]/2, 0, window_size[0]/2, window_size[1]);
 				scene();
@@ -185,9 +168,11 @@ public:
 				glm::scale(glm::translate(id_matrix, glm::vec3(0, 0, 4.0f)), 
 					glm::vec3(1.0f)));
 		savage::models::draw(*model_);
+		/*
 		programs::set_uniform(program_, "ModelMatrix", 
 				glm::translate(id_matrix, glm::vec3(0, 1.0f, 1.0f)));
 		savage::models::draw(*model_);
+		*/
 	}
 	
 	Room(context& context) : 
@@ -197,7 +182,7 @@ public:
 		cursor_speed_(0.003f),
 		camera_move_speed_(1.0f),
 		camera_position_(0.0f, 0.0f, 0.0f),
-		camera_rotation_(0.0f, 0.0f),
+		camera_rotation_(0, 0),
 		model_(0){}
 
 private:
@@ -233,7 +218,7 @@ namespace savage { namespace instances {
 }// namespace savage
 int main(int argc, char* argv[])
 {
-	context context(savage::window_size(640, 400));
+	context context(savage::window_size(1280, 800));
 	glewInit();
 	Room room(context);
 	room.Initialize();

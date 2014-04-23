@@ -1,7 +1,7 @@
-CXX = g++ -std=c++03 -D__STRICT_ANSI__
+CXX = g++ -std=c++03 -D__STRICT_ANSI__ -O3
 CXXFLAGS = -Wall -g -D ROOM_UNIT_TEST
-INCLUDES = -I/home/ACTIVEDIRECTORY/okdshin/boost_1_55_0 -I/home/ACTIVEDIRECTORY/okdshin/Savage
-LIBS = -lGL -lGLEW -lglfw
+INCLUDES = -I/home/okada/Riftia/Savage
+LIBS = -lGL -lGLEW -lglfw -L/home/okada/Riftia/Savage/savage/model/tinyobjloader -ltinyobjloader
 OBJS = Room.o
 PROGRAM = Room.out
 
